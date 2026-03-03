@@ -741,6 +741,7 @@ function fireConfetti() {
 
 // ===== DRAW EXECUTION =====
 async function executeDraw() {
+  if (drawComplete) { log('Draw already executed — locked', 'yellow'); return; }
   if (entrants.length < 3) { log('Need at least 3 entrants to draw', 'yellow'); return; }
   if (isAnimating) return;
   isAnimating = true;
@@ -787,17 +788,62 @@ async function executeDraw() {
   // Confetti
   fireConfetti();
 
-  // Status
+  // LOCK: mark complete immediately
   drawComplete = true;
   setStatus('complete', new Date().toISOString());
   renderEntrants();
-  log('Draw complete — results are provably fair', 'green');
 
-  // Show controls
+  // Hide all admin controls permanently
   document.getElementById('btnDraw').classList.add('hidden');
-  document.getElementById('btnReplay').classList.remove('hidden');
-  document.getElementById('btnDownload').classList.remove('hidden');
   document.getElementById('entryPanel').classList.add('hidden');
+  document.getElementById('btnReplay').classList.remove('hidden');
+
+  // AUTO-COMMIT to GitHub — permanently locks results in the repo
+  log('Committing results to GitHub...', 'cyan');
+  const drawDate = new Date().toISOString();
+  const winnerIndices = winners.map(w => entrants.indexOf(w));
+  const resultsPayload = {
+    status: 'complete',
+    draw_date: drawDate,
+    server_seed: serverSeed,
+    seed_hash_sha256: seedHash,
+    shuffle_key: shuffleKey,
+    algorithm: 'fisher-yates-sha256-counter-mode',
+    algorithm_spec: "shuffleKey=SHA256(serverSeed+':'+entrantCount), PRNG=SHA256(shuffleKey+':'+counter)[0:8]\u2192uint32/2^32, Fisher-Yates descending",
+    entrant_count: entrants.length,
+    winners: winners,
+    winner_indices: winnerIndices
+  };
+  const entrantsPayload = {
+    title: "Zero's Claude Code Giveaway \u2014 @zerokn0wledge_",
+    parsed_at: drawDate,
+    source: tweetSourceUrl || document.getElementById('tweetUrl').value.trim() || '',
+    entrant_count: entrants.length,
+    entrants: entrants
+  };
+
+  try {
+    const commitRes = await fetch('/api/commit-results', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ results: resultsPayload, entrants: entrantsPayload })
+    });
+    const commitData = await commitRes.json();
+    if (commitRes.ok && commitData.success) {
+      log('Results committed to GitHub — permanently locked (commit: ' + commitData.commit.slice(0, 7) + ')', 'green');
+      log('Vercel will auto-redeploy with locked results', 'green');
+    } else {
+      log('Auto-commit failed: ' + (commitData.error || 'unknown error'), 'yellow');
+      log('Download results.json manually as backup', 'yellow');
+      document.getElementById('btnDownload').classList.remove('hidden');
+    }
+  } catch (e) {
+    log('Auto-commit failed: ' + e.message, 'yellow');
+    log('Download results.json manually as backup', 'yellow');
+    document.getElementById('btnDownload').classList.remove('hidden');
+  }
+
+  log('Draw complete — results are provably fair', 'green');
   isAnimating = false;
 }
 
