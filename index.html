@@ -371,6 +371,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     </div>
   </div>
 
+  <!-- Pending Notice (public visitors before draw) -->
+  <div class="fair-panel hidden" id="pendingNotice" style="text-align:center;padding:2rem">
+    <div style="font-family:var(--mono);font-size:1.5rem;color:var(--yellow);margin-bottom:0.75rem">&#9203; Draw Pending</div>
+    <div style="color:var(--text-dim);font-size:0.9rem;line-height:1.6">The draw has not been executed yet. Check back soon to watch the live results<br>and independently verify the winners.</div>
+  </div>
+
   <!-- Draw Arena -->
   <div class="arena">
     <h2>Draw Arena</h2>
@@ -389,7 +395,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
       </div>
     </div>
     <div class="draw-controls">
-      <button class="btn-draw" id="btnDraw" onclick="executeDraw()">Execute Draw</button>
+      <button class="btn-draw hidden" id="btnDraw" onclick="executeDraw()">Execute Draw</button>
       <button class="btn-ghost hidden" id="btnReplay" onclick="replayDraw()">Replay Animation</button>
       <button class="btn-secondary hidden" id="btnDownload" onclick="downloadResults()">Download results.json</button>
     </div>
@@ -427,6 +433,7 @@ let seedHash = '';
 let shuffleKey = '';
 let drawComplete = false;
 let isAnimating = false;
+const isAdmin = new URLSearchParams(window.location.search).has('admin');
 
 // ===== SHA-256 (Web Crypto) =====
 async function sha256(str) {
@@ -861,6 +868,12 @@ window.addEventListener('DOMContentLoaded', async () => {
   initMatrix();
   log('Claude Code Lotto initialized', 'cyan');
 
+  // Always hide admin UI by default — only reveal if admin AND no results yet
+  document.getElementById('entryPanel').classList.add('hidden');
+  document.getElementById('btnDraw').classList.add('hidden');
+
+  let hasResults = false;
+
   // Try loading entrants
   try {
     const eres = await fetch('data/entrants.json');
@@ -880,7 +893,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (rres.ok) {
       const data = await rres.json();
       if (data.status !== 'pending' && data.server_seed) {
-        // PUBLIC MODE
+        hasResults = true;
+
+        // PUBLIC/REPLAY MODE — always active when results exist, no admin override
         serverSeed = data.server_seed;
         seedHash = data.seed_hash_sha256;
         shuffleKey = data.shuffle_key;
@@ -906,6 +921,18 @@ window.addEventListener('DOMContentLoaded', async () => {
       }
     }
   } catch (e) {}
+
+  // If no results yet: admin sees controls, public sees pending notice
+  if (!hasResults) {
+    if (isAdmin) {
+      document.getElementById('entryPanel').classList.remove('hidden');
+      document.getElementById('btnDraw').classList.remove('hidden');
+      log('Admin mode active', 'yellow');
+    } else {
+      document.getElementById('pendingNotice').classList.remove('hidden');
+      log('Draw has not been executed yet', 'yellow');
+    }
+  }
 });
 </script>
 </body>
