@@ -61,6 +61,7 @@ button {
 .preview::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
 .back-link { display: inline-block; margin-bottom: 1rem; color: var(--text-dim); text-decoration: none; font-family: var(--mono); font-size: 0.8rem; }
 .back-link:hover { color: var(--green); }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -70,16 +71,18 @@ button {
   <p class="subtitle">Extract entrants from Twitter/X comments &mdash; <a href="/">Claude Code Lotto</a></p>
 
   <div class="instructions">
-    <strong>How to use:</strong>
-    <ol>
-      <li>Go to your tweet's comments on Twitter/X</li>
-      <li>Scroll through ALL comments to load them</li>
-      <li>Select all (Cmd+A / Ctrl+A) and copy</li>
-      <li>Paste everything below &mdash; the parser handles the mess</li>
-      <li>Click Parse &rarr; Download JSON</li>
-      <li>Save as <code style="color:var(--cyan)">data/entrants.json</code> in the repo</li>
-    </ol>
+    <strong>Option A &mdash; Auto-fetch (recommended):</strong> Paste your tweet URL below and click Fetch. Requires <code style="color:var(--cyan)">TWITTER_BEARER_TOKEN</code> env var in Vercel.<br><br>
+    <strong>Option B &mdash; Manual paste:</strong> Copy all content from your tweet's comment section and paste it below.
   </div>
+
+  <!-- Auto-fetch -->
+  <div style="display:flex;gap:0.75rem;margin-bottom:1rem">
+    <input type="text" id="tweetUrl" placeholder="https://x.com/zerokn0wledge_/status/..." style="flex:1;background:var(--bg3);color:var(--text);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:0.7rem 1rem;font-family:var(--mono);font-size:0.85rem;outline:none">
+    <button class="btn-primary" id="btnFetch" onclick="fetchFromTwitter()">Fetch from Twitter</button>
+  </div>
+  <div id="fetchStatus" style="font-family:var(--mono);font-size:0.8rem;padding:0.75rem 1rem;border-radius:8px;margin-bottom:1rem;display:none"></div>
+
+  <div style="display:flex;align-items:center;gap:1rem;margin:1rem 0;color:var(--text-dim);font-family:var(--mono);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em"><span style="flex:1;height:1px;background:rgba(255,255,255,0.06)"></span>or paste manually<span style="flex:1;height:1px;background:rgba(255,255,255,0.06)"></span></div>
 
   <textarea id="rawInput" placeholder="Paste raw Twitter/X page content here..."></textarea>
 
@@ -96,6 +99,58 @@ button {
 </div>
 
 <script>
+let tweetSourceUrl = '';
+
+async function fetchFromTwitter() {
+  const url = document.getElementById('tweetUrl').value.trim();
+  if (!url) return;
+  const statusEl = document.getElementById('fetchStatus');
+  const btn = document.getElementById('btnFetch');
+  btn.disabled = true;
+  statusEl.style.display = 'block';
+  statusEl.style.background = 'rgba(0,229,255,0.08)';
+  statusEl.style.border = '1px solid rgba(0,229,255,0.2)';
+  statusEl.style.color = 'var(--cyan)';
+  statusEl.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(0,229,255,0.3);border-top-color:var(--cyan);border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:0.5rem"></span>Fetching replies from Twitter API...';
+
+  try {
+    const res = await fetch('/api/fetch-replies?url=' + encodeURIComponent(url));
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'API returned ' + res.status);
+    if (!data.entrants || data.entrants.length === 0) {
+      statusEl.style.background = 'rgba(255,59,59,0.08)';
+      statusEl.style.border = '1px solid rgba(255,59,59,0.2)';
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = 'No commenters found. Tweet may have no replies, or API token may lack search access.';
+      btn.disabled = false;
+      return;
+    }
+    parsedEntrants = data.entrants;
+    tweetSourceUrl = url;
+
+    statusEl.style.background = 'rgba(0,255,136,0.08)';
+    statusEl.style.border = '1px solid rgba(0,255,136,0.2)';
+    statusEl.style.color = 'var(--green)';
+    statusEl.textContent = 'Loaded ' + data.entrant_count + ' unique commenters from ' + data.total_replies + ' replies (host @' + data.host + ' excluded)';
+
+    const statsEl = document.getElementById('stats');
+    statsEl.style.display = 'block';
+    statsEl.innerHTML = 'Fetched <span class="num">' + data.total_replies + '</span> replies <span class="arrow">&rarr;</span> <span class="num">' + data.entrant_count + '</span> unique entrants';
+
+    const json = buildJSON();
+    document.getElementById('previewLabel').style.display = 'block';
+    const previewEl = document.getElementById('preview');
+    previewEl.style.display = 'block';
+    previewEl.textContent = JSON.stringify(json, null, 2);
+  } catch (e) {
+    statusEl.style.background = 'rgba(255,59,59,0.08)';
+    statusEl.style.border = '1px solid rgba(255,59,59,0.2)';
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = 'Failed: ' + e.message;
+  }
+  btn.disabled = false;
+}
+
 const SKIP_WORDS = new Set([
   'mention','reply','repost','quote','share','like','follow','replying',
   'retweeted','everyone','here','channel','username','handle',
@@ -154,10 +209,11 @@ function parseUsernames() {
 }
 
 function buildJSON() {
+  const source = tweetSourceUrl || document.getElementById('tweetUrl').value.trim() || 'https://x.com/zerokn0wledge_/status/TWEET_ID';
   return {
     title: "Claude Code Giveaway — @zerokn0wledge_",
     parsed_at: new Date().toISOString(),
-    source: "https://x.com/zerokn0wledge_/status/TWEET_ID",
+    source: source,
     entrant_count: parsedEntrants.length,
     entrants: parsedEntrants
   };

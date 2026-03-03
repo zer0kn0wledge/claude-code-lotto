@@ -95,11 +95,24 @@ seededShuffle(array, seedHex):
 
 ---
 
+## Setup
+
+### Vercel Deployment
+
+1. Import the GitHub repo into Vercel
+2. Add environment variable: `TWITTER_BEARER_TOKEN` = your Twitter/X API v2 Bearer Token
+3. Deploy — that's it
+
+The Bearer Token enables the **auto-fetch** feature: paste a tweet URL and the API automatically fetches all commenters. Requires Twitter API Basic tier ($100/mo) for the search/recent endpoint.
+
+Without the token, manual entry (paste usernames or load JSON) still works.
+
 ## Tech Stack
 
-- Pure HTML/CSS/JS — zero dependencies, zero build step
+- Pure HTML/CSS/JS — zero external dependencies
+- Vercel serverless function for Twitter API integration (`api/fetch-replies.js`)
 - Web Crypto API for SHA-256 (browser), Node `crypto` module (CLI)
-- Hosted on Vercel as a static site
+- Hosted on Vercel
 - No frameworks, no tracking, no third-party scripts
 
 ---
