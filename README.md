@@ -1,4 +1,4 @@
-# Claude Code Giveaway — Provably Fair Lottery
+# Zero's Claude Code Giveaway — Provably Fair Lottery
 
 3 free weeks of Claude Code, randomly drawn from Twitter/X commenters.
 

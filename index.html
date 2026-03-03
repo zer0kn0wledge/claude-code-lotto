@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Claude Code Giveaway — Provably Fair Lottery</title>
+<title>Zero's Claude Code Giveaway — Provably Fair Lottery</title>
 <meta name="description" content="Provably fair lottery for 3 free weeks of Claude Code. Cryptographically verified random draw.">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -295,7 +295,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   <!-- Header -->
   <div class="header">
     <div class="badge"><span class="dot"></span> Provably Fair Lottery</div>
-    <div class="title">Claude Code Giveaway</div>
+    <div class="title">Zero's Claude Code Giveaway</div>
     <div class="sub">3 &times; Free Week of Claude Code &mdash; Random Draw</div>
     <div class="host">hosted by <a href="https://x.com/zerokn0wledge_" target="_blank">@zerokn0wledge_</a></div>
   </div>
@@ -413,7 +413,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
   <!-- Footer -->
   <div class="footer">
-    <a href="https://x.com/zerokn0wledge_" target="_blank">Claude Code Giveaway by @zerokn0wledge_</a>
+    <a href="https://x.com/zerokn0wledge_" target="_blank">Zero's Claude Code Giveaway by @zerokn0wledge_</a>
     <div class="foot-sub">Provably fair &bull; Open source &bull; Deterministic verification</div>
   </div>
 </div>
@@ -609,7 +609,7 @@ function handleFile(e) {
 function clearEntrants() { entrants = []; winners = []; updateStats(); renderEntrants(); log('Cleared all entrants', 'yellow'); }
 function exportEntrants() {
   const source = tweetSourceUrl || document.getElementById('tweetUrl').value.trim() || 'https://x.com/zerokn0wledge_/status/TWEET_ID';
-  const data = { title: "Claude Code Giveaway \u2014 @zerokn0wledge_", parsed_at: new Date().toISOString(), source: source, entrant_count: entrants.length, entrants };
+  const data = { title: "Zero's Claude Code Giveaway \u2014 @zerokn0wledge_", parsed_at: new Date().toISOString(), source: source, entrant_count: entrants.length, entrants };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'entrants.json'; a.click(); URL.revokeObjectURL(a.href);
 }
