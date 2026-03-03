@@ -1,0 +1,12 @@
+{
+  "status": "pending",
+  "draw_date": "",
+  "server_seed": "",
+  "seed_hash_sha256": "",
+  "shuffle_key": "",
+  "algorithm": "fisher-yates-sha256-counter-mode",
+  "algorithm_spec": "shuffleKey=SHA256(serverSeed+':'+entrantCount), PRNG=SHA256(shuffleKey+':'+counter)[0:8]->uint32/2^32, Fisher-Yates descending",
+  "entrant_count": 0,
+  "winners": [],
+  "winner_indices": []
+}

@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "routes": [
+    { "src": "/parser", "dest": "/parser.html" },
+    { "src": "/verify", "dest": "/verify.html" },
+    { "src": "/data/(.*)", "dest": "/data/$1" },
+    { "src": "/(.*)", "dest": "/$1" }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "claude-code-lotto",
+  "version": "1.0.0",
+  "description": "Provably fair lottery for Claude Code giveaway",
+  "type": "module",
+  "scripts": {
+    "verify": "node scripts/verify.mjs"
+  }
+}

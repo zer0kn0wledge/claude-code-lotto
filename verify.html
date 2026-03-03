@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verify Draw — Claude Code Lotto</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a0a0f; --bg2: #111119; --bg3: #1a1a25;
+  --green: #00ff88; --green2: #00cc6a; --green-dim: rgba(0,255,136,0.12);
+  --cyan: #00e5ff; --purple: #a855f7; --red: #ff3b3b; --yellow: #ffd600;
+  --text: #e0e0e8; --text-dim: #6a6a80;
+  --mono: 'SF Mono','Fira Code','Cascadia Code','JetBrains Mono',Consolas,monospace;
+  --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+}
+body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; padding: 2rem 1rem; }
+.container { max-width: 900px; margin: 0 auto; }
+a { color: var(--green); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.back-link { display: inline-block; margin-bottom: 1rem; color: var(--text-dim); font-family: var(--mono); font-size: 0.8rem; }
+.back-link:hover { color: var(--green); }
+h1 { font-family: var(--mono); font-size: 1.5rem; color: var(--green); margin-bottom: 0.25rem; }
+.subtitle { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 2rem; }
+
+/* Status Banner */
+.banner {
+  padding: 1.25rem; border-radius: 10px; text-align: center; font-family: var(--mono);
+  font-size: 1.1rem; font-weight: 700; margin-bottom: 2rem;
+}
+.banner.pass { background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.3); color: var(--green); }
+.banner.fail { background: rgba(255,59,59,0.1); border: 1px solid rgba(255,59,59,0.3); color: var(--red); }
+.banner.pending { background: rgba(255,214,0,0.1); border: 1px solid rgba(255,214,0,0.3); color: var(--yellow); }
+
+/* Section */
+.section { background: var(--bg2); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 1.5rem; margin-bottom: 1.5rem; }
+.section h2 { font-family: var(--mono); font-size: 1rem; color: var(--cyan); margin-bottom: 1rem; }
+
+/* Step */
+.step { margin-bottom: 1.25rem; padding-bottom: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.step:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.step-title { font-family: var(--mono); font-weight: 700; margin-bottom: 0.5rem; }
+.step-row { font-family: var(--mono); font-size: 0.8rem; margin: 0.3rem 0; display: flex; gap: 0.75rem; }
+.step-row .label { color: var(--text-dim); min-width: 100px; flex-shrink: 0; }
+.step-row .value { word-break: break-all; user-select: all; }
+.step-result { font-family: var(--mono); font-weight: 700; margin-top: 0.5rem; }
+.step-result.pass { color: var(--green); }
+.step-result.fail { color: var(--red); }
+
+/* Manual verify */
+label { display: block; font-family: var(--mono); font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.4rem; margin-top: 1rem; }
+input[type="text"], textarea.manual {
+  width: 100%; background: var(--bg3); color: var(--text); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px; padding: 0.6rem 0.8rem; font-family: var(--mono); font-size: 0.8rem; outline: none;
+}
+input[type="text"]:focus, textarea.manual:focus { border-color: var(--green); }
+textarea.manual { height: 120px; resize: vertical; }
+button {
+  font-family: var(--mono); font-size: 0.85rem; padding: 0.6rem 1.25rem; border: none; border-radius: 6px;
+  cursor: pointer; margin-top: 1rem; transition: all 0.2s;
+}
+.btn-primary { background: var(--green); color: #000; font-weight: 700; }
+.btn-primary:hover { background: var(--green2); }
+
+/* Algo spec */
+pre {
+  background: var(--bg3); border-radius: 6px; padding: 1rem; font-family: var(--mono); font-size: 0.8rem;
+  color: var(--text-dim); overflow-x: auto; line-height: 1.6; white-space: pre-wrap;
+}
+code { font-family: var(--mono); color: var(--cyan); font-size: 0.85em; }
+
+/* Links */
+.links { display: flex; gap: 1rem; flex-wrap: wrap; }
+.link-card {
+  background: var(--bg3); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px;
+  padding: 1rem 1.25rem; flex: 1; min-width: 200px; transition: border-color 0.2s;
+}
+.link-card:hover { border-color: var(--green); }
+.link-card .link-title { font-family: var(--mono); font-weight: 700; color: var(--green); margin-bottom: 0.25rem; }
+.link-card .link-desc { font-size: 0.8rem; color: var(--text-dim); }
+
+/* Code snippets */
+.snippet-tabs { display: flex; gap: 0; margin-bottom: 0; }
+.snippet-tab {
+  padding: 0.5rem 1rem; font-family: var(--mono); font-size: 0.75rem; background: var(--bg3);
+  border: 1px solid rgba(255,255,255,0.06); color: var(--text-dim); cursor: pointer; border-bottom: none;
+}
+.snippet-tab.active { color: var(--green); background: var(--bg2); border-color: rgba(0,255,136,0.2); }
+.snippet-content { display: none; }
+.snippet-content.active { display: block; }
+</style>
+</head>
+<body>
+<div class="container">
+  <a href="/" class="back-link">&larr; Back to Lottery</a>
+  <h1>Verify Draw</h1>
+  <p class="subtitle">Independent cryptographic verification of the Claude Code Giveaway draw</p>
+
+  <div class="banner pending" id="banner">Loading...</div>
+
+  <!-- Auto verification -->
+  <div class="section" id="autoVerify">
+    <h2>Step-by-Step Verification</h2>
+    <div id="steps"><p style="color:var(--text-dim)">Loading data...</p></div>
+  </div>
+
+  <!-- Manual verification -->
+  <div class="section">
+    <h2>Manual Verification</h2>
+    <p style="color:var(--text-dim);font-size:0.85rem;margin-bottom:0.5rem">Verify with your own inputs &mdash; no need to trust the auto-loaded data.</p>
+    <label>Server Seed</label>
+    <input type="text" id="manualSeed" placeholder="Paste server seed here">
+    <label>Entrants (JSON array or one per line)</label>
+    <textarea class="manual" id="manualEntrants" placeholder='["user1","user2","user3"] or one username per line'></textarea>
+    <button class="btn-primary" onclick="manualVerify()">Verify</button>
+    <div id="manualResult"></div>
+  </div>
+
+  <!-- Algorithm spec -->
+  <div class="section">
+    <h2>Algorithm Specification</h2>
+    <p style="color:var(--text-dim);font-size:0.85rem;margin-bottom:1rem">The exact algorithm used. Anyone can reimplement this in any language to verify.</p>
+    <pre>
+<strong style="color:var(--cyan)">SHA-256 PRNG — Counter Mode</strong>
+
+  createPRNG(seedHex):
+    counter = 0
+    next():
+      hash = SHA256(seedHex + ":" + counter)
+      counter++
+      return parseInt(hash[0..7], 16) / 2^32
+
+<strong style="color:var(--cyan)">Fisher-Yates Shuffle</strong>
+
+  seededShuffle(array, seedHex):
+    rng = createPRNG(seedHex)
+    a = copy(array)
+    for i from (a.length - 1) down to 1:
+      j = floor(rng.next() * (i + 1))
+      swap(a[i], a[j])
+    return a
+
+<strong style="color:var(--cyan)">Draw Procedure</strong>
+
+  1. serverSeed = random secret string
+  2. seedHash = SHA256(serverSeed)       ← published BEFORE draw
+  3. shuffleKey = SHA256(serverSeed + ":" + entrantCount)
+  4. shuffled = seededShuffle(entrants, shuffleKey)
+  5. winners = shuffled[0], shuffled[1], shuffled[2]
+  6. serverSeed revealed AFTER draw      ← anyone can now verify</pre>
+  </div>
+
+  <!-- Code snippets -->
+  <div class="section">
+    <h2>Verify in Your Language</h2>
+    <div class="snippet-tabs">
+      <div class="snippet-tab active" onclick="showSnippet('node')">Node.js</div>
+      <div class="snippet-tab" onclick="showSnippet('python')">Python</div>
+    </div>
+    <pre class="snippet-content active" id="snippet-node">
+import { createHash } from 'crypto';
+
+function sha256(s) {
+  return createHash('sha256').update(s).digest('hex');
+}
+
+function createPRNG(seedHex) {
+  let counter = 0;
+  return () => {
+    const hash = sha256(seedHex + ':' + counter++);
+    return parseInt(hash.slice(0, 8), 16) / 0x100000000;
+  };
+}
+
+function seededShuffle(arr, seedHex) {
+  const rng = createPRNG(seedHex);
+  const a = [...arr];
+  for (let i = a.length - 1; i >= 1; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Usage:
+// const shuffleKey = sha256(serverSeed + ':' + entrants.length);
+// const winners = seededShuffle(entrants, shuffleKey).slice(0, 3);</pre>
+    <pre class="snippet-content" id="snippet-python">
+import hashlib
+
+def sha256(s):
+    return hashlib.sha256(s.encode()).hexdigest()
+
+def create_prng(seed_hex):
+    counter = [0]
+    def next_val():
+        h = sha256(f"{seed_hex}:{counter[0]}")
+        counter[0] += 1
+        return int(h[:8], 16) / 0x100000000
+    return next_val
+
+def seeded_shuffle(arr, seed_hex):
+    rng = create_prng(seed_hex)
+    a = list(arr)
+    for i in range(len(a) - 1, 0, -1):
+        j = int(rng() * (i + 1))
+        a[i], a[j] = a[j], a[i]
+    return a
+
+# Usage:
+# shuffle_key = sha256(server_seed + ':' + str(len(entrants)))
+# winners = seeded_shuffle(entrants, shuffle_key)[:3]</pre>
+  </div>
+
+  <!-- Links -->
+  <div class="section">
+    <h2>Links</h2>
+    <div class="links">
+      <a href="/" class="link-card"><div class="link-title">Main Draw Page</div><div class="link-desc">Watch the draw animation replay</div></a>
+      <a href="https://github.com/zer0kn0wledge/claude-code-lotto" class="link-card" target="_blank"><div class="link-title">Source Code</div><div class="link-desc">Full source on GitHub</div></a>
+      <a href="https://x.com/zerokn0wledge_" class="link-card" target="_blank"><div class="link-title">@zerokn0wledge_</div><div class="link-desc">Giveaway host on Twitter/X</div></a>
+    </div>
+  </div>
+</div>
+
+<script>
+async function sha256(str) {
+  const buf = new TextEncoder().encode(str);
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function createPRNG(seedHex) {
+  let counter = 0;
+  return async function next() {
+    const input = seedHex + ':' + counter;
+    counter++;
+    const hash = await sha256(input);
+    const value = parseInt(hash.slice(0, 8), 16);
+    return value / 0x100000000;
+  };
+}
+
+async function seededShuffle(array, seedHex) {
+  const rng = createPRNG(seedHex);
+  const a = [...array];
+  for (let i = a.length - 1; i >= 1; i--) {
+    const r = await rng();
+    const j = Math.floor(r * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function showSnippet(lang) {
+  document.querySelectorAll('.snippet-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.snippet-content').forEach(c => c.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('snippet-' + lang).classList.add('active');
+}
+
+async function runVerification(serverSeed, seedHashExpected, shuffleKeyExpected, entrants, winnersExpected) {
+  const stepsEl = document.getElementById('steps');
+  stepsEl.innerHTML = '';
+  let allPass = true;
+
+  // Step 1
+  const computedHash = await sha256(serverSeed);
+  const hashPass = computedHash === seedHashExpected;
+  if (!hashPass) allPass = false;
+  stepsEl.innerHTML += `
+    <div class="step">
+      <div class="step-title">Step 1: Seed Hash Verification</div>
+      <div class="step-row"><span class="label">Input:</span><span class="value">${serverSeed}</span></div>
+      <div class="step-row"><span class="label">Expected:</span><span class="value">${seedHashExpected}</span></div>
+      <div class="step-row"><span class="label">Computed:</span><span class="value">${computedHash}</span></div>
+      <div class="step-result ${hashPass ? 'pass' : 'fail'}">${hashPass ? '&#10003; MATCH' : '&#10007; MISMATCH'}</div>
+    </div>`;
+
+  // Step 2
+  const computedKey = await sha256(serverSeed + ':' + entrants.length);
+  const keyPass = computedKey === shuffleKeyExpected;
+  if (!keyPass) allPass = false;
+  stepsEl.innerHTML += `
+    <div class="step">
+      <div class="step-title">Step 2: Shuffle Key Derivation</div>
+      <div class="step-row"><span class="label">Input:</span><span class="value">sha256(serverSeed + ":" + ${entrants.length})</span></div>
+      <div class="step-row"><span class="label">Expected:</span><span class="value">${shuffleKeyExpected}</span></div>
+      <div class="step-row"><span class="label">Computed:</span><span class="value">${computedKey}</span></div>
+      <div class="step-result ${keyPass ? 'pass' : 'fail'}">${keyPass ? '&#10003; MATCH' : '&#10007; MISMATCH'}</div>
+    </div>`;
+
+  // Step 3
+  const shuffled = await seededShuffle(entrants, computedKey);
+  const derivedWinners = shuffled.slice(0, 3);
+  const winnersPass = winnersExpected.length === derivedWinners.length &&
+    winnersExpected.every((w, i) => w === derivedWinners[i]);
+  if (!winnersPass) allPass = false;
+
+  let shuffledPreview = shuffled.slice(0, 10).map((u, i) => {
+    const isWinner = i < 3;
+    return `<span style="color:${isWinner ? 'var(--green);font-weight:700' : 'var(--text-dim)'}">${i + 1}. @${u}${isWinner ? ' ★' : ''}</span>`;
+  }).join('<br>');
+
+  stepsEl.innerHTML += `
+    <div class="step">
+      <div class="step-title">Step 3: Winner Derivation</div>
+      <div style="font-family:var(--mono);font-size:0.8rem;margin:0.5rem 0;line-height:1.8">${shuffledPreview}${shuffled.length > 10 ? '<br><span style="color:var(--text-dim)">... +' + (shuffled.length - 10) + ' more</span>' : ''}</div>
+      <div class="step-row"><span class="label">Expected:</span><span class="value" style="color:var(--green)">${winnersExpected.map(w => '@' + w).join(', ')}</span></div>
+      <div class="step-row"><span class="label">Derived:</span><span class="value" style="color:var(--cyan)">${derivedWinners.map(w => '@' + w).join(', ')}</span></div>
+      <div class="step-result ${winnersPass ? 'pass' : 'fail'}">${winnersPass ? '&#10003; MATCH' : '&#10007; MISMATCH'}</div>
+    </div>`;
+
+  return allPass;
+}
+
+function setBanner(status) {
+  const b = document.getElementById('banner');
+  if (status === 'pass') { b.className = 'banner pass'; b.innerHTML = '&#10003; DRAW VERIFIED &mdash; PROVABLY FAIR'; }
+  else if (status === 'fail') { b.className = 'banner fail'; b.innerHTML = '&#10007; VERIFICATION FAILED'; }
+  else { b.className = 'banner pending'; b.innerHTML = '&#9203; DRAW PENDING'; }
+}
+
+let loadedEntrants = [];
+let loadedResults = null;
+
+window.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const eres = await fetch('/data/entrants.json');
+    if (eres.ok) {
+      const d = await eres.json();
+      if (d.entrants) loadedEntrants = d.entrants;
+    }
+  } catch (e) {}
+
+  try {
+    const rres = await fetch('/data/results.json');
+    if (rres.ok) {
+      loadedResults = await rres.json();
+    }
+  } catch (e) {}
+
+  if (!loadedResults || loadedResults.status === 'pending' || !loadedResults.server_seed) {
+    setBanner('pending');
+    document.getElementById('steps').innerHTML = '<p style="color:var(--yellow)">Draw has not been executed yet. Check back after the draw.</p>';
+    return;
+  }
+
+  // Pre-fill manual inputs
+  document.getElementById('manualSeed').value = loadedResults.server_seed;
+  document.getElementById('manualEntrants').value = JSON.stringify(loadedEntrants);
+
+  // Auto-run verification
+  const pass = await runVerification(
+    loadedResults.server_seed,
+    loadedResults.seed_hash_sha256,
+    loadedResults.shuffle_key,
+    loadedEntrants,
+    loadedResults.winners
+  );
+  setBanner(pass ? 'pass' : 'fail');
+});
+
+async function manualVerify() {
+  const seed = document.getElementById('manualSeed').value.trim();
+  if (!seed) return alert('Enter a server seed');
+
+  let entrants;
+  const raw = document.getElementById('manualEntrants').value.trim();
+  try {
+    entrants = JSON.parse(raw);
+    if (!Array.isArray(entrants)) throw new Error();
+  } catch {
+    entrants = raw.split('\n').map(l => l.trim().replace(/^@/, '')).filter(Boolean);
+  }
+  if (entrants.length < 3) return alert('Need at least 3 entrants');
+
+  const seedHash = await sha256(seed);
+  const shuffleKey = await sha256(seed + ':' + entrants.length);
+  const shuffled = await seededShuffle(entrants, shuffleKey);
+  const winners = shuffled.slice(0, 3);
+
+  const resEl = document.getElementById('manualResult');
+  resEl.innerHTML = `
+    <div style="margin-top:1rem;padding:1rem;background:var(--bg3);border-radius:8px;font-family:var(--mono);font-size:0.85rem">
+      <div style="color:var(--cyan);margin-bottom:0.5rem">Manual Verification Result</div>
+      <div style="color:var(--text-dim)">Seed Hash: <span style="color:var(--text);user-select:all">${seedHash}</span></div>
+      <div style="color:var(--text-dim)">Shuffle Key: <span style="color:var(--text);user-select:all">${shuffleKey}</span></div>
+      <div style="color:var(--green);margin-top:0.5rem;font-weight:700">Winners: ${winners.map(w => '@' + w).join(', ')}</div>
+    </div>`;
+}
+</script>
+</body>
+</html>

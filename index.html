@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code Giveaway — Provably Fair Lottery</title>
+<meta name="description" content="Provably fair lottery for 3 free weeks of Claude Code. Cryptographically verified random draw.">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a0a0f; --bg2: #111119; --bg3: #1a1a25;
+  --green: #00ff88; --green2: #00cc6a; --green-dim: rgba(0,255,136,0.12);
+  --cyan: #00e5ff; --purple: #a855f7; --pink: #ff4daa;
+  --red: #ff3b3b; --yellow: #ffd600;
+  --text: #e0e0e8; --text-dim: #6a6a80;
+  --mono: 'SF Mono','Fira Code','Cascadia Code','JetBrains Mono',Consolas,monospace;
+  --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+}
+body {
+  background: var(--bg); color: var(--text); font-family: var(--sans);
+  min-height: 100vh; overflow-x: hidden;
+}
+body::after {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 1;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+}
+
+/* Matrix Rain Canvas */
+#matrix { position: fixed; inset: 0; z-index: 0; opacity: 0.08; pointer-events: none; }
+
+/* Main content */
+.page { position: relative; z-index: 2; padding: 2rem 1rem; max-width: 1100px; margin: 0 auto; }
+
+/* Header */
+.header { text-align: center; margin-bottom: 2.5rem; }
+.badge {
+  display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.35rem 1rem;
+  background: var(--green-dim); border: 1px solid rgba(0,255,136,0.2); border-radius: 100px;
+  font-family: var(--mono); font-size: 0.7rem; color: var(--green); text-transform: uppercase;
+  letter-spacing: 0.1em; margin-bottom: 1rem;
+}
+.badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+.title {
+  font-family: var(--mono); font-size: clamp(1.8rem, 5vw, 3rem); font-weight: 800;
+  background: linear-gradient(135deg, var(--green), var(--cyan));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text; line-height: 1.2; margin-bottom: 0.5rem;
+}
+.header .sub { color: var(--text-dim); font-size: 1rem; margin-bottom: 0.5rem; }
+.header .host { color: var(--text-dim); font-size: 0.9rem; }
+.header .host a { color: var(--green); text-decoration: none; font-weight: 600; }
+.header .host a:hover { text-decoration: underline; }
+
+/* Stats Bar */
+.stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; }
+.stat-card {
+  background: var(--bg2); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px;
+  padding: 1rem; text-align: center;
+}
+.stat-label { font-family: var(--mono); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 0.4rem; }
+.stat-value { font-family: var(--mono); font-size: 1.3rem; font-weight: 700; }
+.stat-value.cyan { color: var(--cyan); }
+.stat-value.green { color: var(--green); }
+.stat-value.yellow { color: var(--yellow); }
+.status-badge {
+  display: inline-block; padding: 0.2rem 0.75rem; border-radius: 100px;
+  font-family: var(--mono); font-size: 0.75rem; font-weight: 700;
+}
+.status-pending { background: rgba(255,214,0,0.15); color: var(--yellow); }
+.status-drawing { background: rgba(0,229,255,0.15); color: var(--cyan); }
+.status-complete { background: var(--green-dim); color: var(--green); }
+
+/* Provably Fair Panel */
+.fair-panel {
+  background: linear-gradient(135deg, rgba(0,255,136,0.04), rgba(0,229,255,0.02));
+  border: 1px solid rgba(0,255,136,0.15); border-radius: 12px;
+  padding: 1.5rem; margin-bottom: 2rem;
+}
+.fair-panel h2 { font-family: var(--mono); font-size: 0.9rem; color: var(--green); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+.fair-row { margin-bottom: 0.75rem; }
+.fair-label { font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); margin-bottom: 0.2rem; }
+.fair-value {
+  font-family: var(--mono); font-size: 0.8rem; color: var(--text); background: rgba(0,0,0,0.3);
+  padding: 0.5rem 0.75rem; border-radius: 6px; word-break: break-all; user-select: all; cursor: text;
+}
+.fair-value.hidden { color: var(--yellow); user-select: none; cursor: default; }
+.fair-algo { font-size: 0.8rem; color: var(--text-dim); line-height: 1.6; margin-top: 1rem; }
+.fair-algo a { color: var(--cyan); text-decoration: none; }
+.fair-algo a:hover { text-decoration: underline; }
+
+/* Entry Management (Admin) */
+.entry-panel {
+  background: var(--bg2); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;
+  padding: 1.5rem; margin-bottom: 2rem;
+}
+.entry-panel h2 { font-family: var(--mono); font-size: 0.9rem; color: var(--cyan); margin-bottom: 1rem; }
+.entry-panel textarea {
+  width: 100%; height: 120px; background: var(--bg3); color: var(--text); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px; padding: 0.75rem; font-family: var(--mono); font-size: 0.8rem; resize: vertical; outline: none;
+}
+.entry-panel textarea:focus { border-color: var(--green); }
+.entry-panel textarea::placeholder { color: var(--text-dim); }
+.entry-hint { font-size: 0.75rem; color: var(--text-dim); margin: 0.5rem 0; }
+.btn-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.75rem; }
+.hidden { display: none !important; }
+
+/* Buttons */
+button {
+  font-family: var(--mono); font-size: 0.85rem; padding: 0.6rem 1.25rem; border: none;
+  border-radius: 6px; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden;
+}
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-sm { padding: 0.45rem 1rem; font-size: 0.8rem; }
+.btn-primary { background: var(--green); color: #000; font-weight: 700; }
+.btn-primary:hover:not(:disabled) { background: var(--green2); }
+.btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid rgba(255,255,255,0.1); }
+.btn-secondary:hover:not(:disabled) { border-color: var(--green); color: var(--green); }
+.btn-ghost { background: transparent; color: var(--green); border: 1px solid var(--green); }
+.btn-ghost:hover:not(:disabled) { background: var(--green-dim); }
+.btn-danger { background: rgba(255,59,59,0.15); color: var(--red); border: 1px solid rgba(255,59,59,0.2); }
+.btn-danger:hover:not(:disabled) { background: rgba(255,59,59,0.25); }
+
+/* Draw button shimmer */
+.btn-draw {
+  background: linear-gradient(135deg, var(--green), var(--green2));
+  color: #000; font-weight: 800; font-size: 1rem; padding: 0.9rem 2.5rem;
+  text-transform: uppercase; letter-spacing: 0.1em;
+}
+.btn-draw::after {
+  content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  animation: shimmer 3s infinite;
+}
+@keyframes shimmer { 0% { left: -100%; } 100% { left: 200%; } }
+.btn-draw:disabled::after { display: none; }
+
+/* Draw Arena */
+.arena {
+  background: var(--bg2); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px;
+  padding: 2rem; margin-bottom: 2rem; position: relative;
+  background-image: radial-gradient(ellipse at top center, rgba(0,255,136,0.04), transparent 60%);
+}
+.arena h2 { font-family: var(--mono); font-size: 0.9rem; color: var(--cyan); margin-bottom: 1.5rem; text-align: center; }
+.reels { display: flex; gap: 1.5rem; justify-content: center; flex-wrap: wrap; }
+.reel-container { flex: 0 0 280px; max-width: 320px; }
+.reel-header {
+  font-family: var(--mono); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-dim); text-align: center; margin-bottom: 0.5rem;
+}
+.reel-window {
+  height: 200px; overflow: hidden; position: relative;
+  background: var(--bg3); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px;
+}
+.reel-pointer {
+  position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%);
+  height: 42px; border-top: 2px solid var(--green); border-bottom: 2px solid var(--green);
+  pointer-events: none; z-index: 2;
+  box-shadow: 0 0 15px rgba(0,255,136,0.15), inset 0 0 15px rgba(0,255,136,0.05);
+}
+.reel-track { transition: none; }
+.reel-item {
+  height: 40px; display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 0.85rem; color: var(--text-dim);
+  padding: 0 0.5rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.reel-item.winner {
+  color: var(--green); font-weight: 700;
+  text-shadow: 0 0 10px rgba(0,255,136,0.5);
+  background: linear-gradient(90deg, transparent, rgba(0,255,136,0.08), transparent);
+}
+.draw-controls { text-align: center; margin-top: 1.5rem; }
+
+/* Winner Cards */
+.winner-cards { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-top: 1.5rem; }
+.winner-card {
+  background: var(--bg3); border: 1px solid rgba(0,255,136,0.2); border-radius: 12px;
+  padding: 1.25rem 1.75rem; text-align: center; min-width: 180px;
+  opacity: 0; transform: translateY(20px); transition: all 0.5s ease;
+}
+.winner-card.revealed { opacity: 1; transform: translateY(0); }
+.winner-rank {
+  width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center;
+  justify-content: center; font-weight: 800; font-size: 0.9rem; margin-bottom: 0.5rem;
+}
+.rank-1 { background: linear-gradient(135deg, #ffd700, #ffaa00); color: #000; }
+.rank-2 { background: linear-gradient(135deg, #c0c0c0, #888); color: #000; }
+.rank-3 { background: linear-gradient(135deg, #cd7f32, #a0522d); color: #fff; }
+.winner-name { font-family: var(--mono); font-size: 1.1rem; color: var(--green); font-weight: 700; margin-bottom: 0.25rem; }
+.winner-entry { font-family: var(--mono); font-size: 0.7rem; color: var(--text-dim); }
+
+/* Entrants List */
+.entrants-section {
+  background: var(--bg2); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;
+  padding: 1.5rem; margin-bottom: 2rem;
+}
+.entrants-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.entrants-header h2 { font-family: var(--mono); font-size: 0.9rem; color: var(--cyan); white-space: nowrap; }
+.search-input {
+  background: var(--bg3); color: var(--text); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px; padding: 0.4rem 0.75rem; font-family: var(--mono); font-size: 0.8rem;
+  outline: none; width: 220px;
+}
+.search-input:focus { border-color: var(--green); }
+.search-input::placeholder { color: var(--text-dim); }
+.entrants-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.35rem;
+  max-height: 400px; overflow-y: auto; padding-right: 0.5rem;
+}
+.entrants-grid::-webkit-scrollbar { width: 6px; }
+.entrants-grid::-webkit-scrollbar-track { background: transparent; }
+.entrants-grid::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+.entrant-item {
+  font-family: var(--mono); font-size: 0.8rem; color: var(--text-dim);
+  padding: 0.3rem 0.5rem; border-radius: 4px;
+}
+.entrant-item.is-winner {
+  color: var(--green); font-weight: 600;
+  border: 1px solid rgba(0,255,136,0.2); background: rgba(0,255,136,0.05);
+}
+
+/* Audit Log */
+.audit-section {
+  background: var(--bg2); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;
+  padding: 1.5rem; margin-bottom: 2rem;
+}
+.audit-section h2 { font-family: var(--mono); font-size: 0.9rem; color: var(--cyan); margin-bottom: 1rem; }
+.audit-log {
+  font-family: var(--mono); font-size: 0.75rem; max-height: 250px; overflow-y: auto;
+  background: var(--bg3); border-radius: 8px; padding: 0.75rem;
+}
+.audit-log::-webkit-scrollbar { width: 6px; }
+.audit-log::-webkit-scrollbar-track { background: transparent; }
+.audit-log::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+.log-entry { padding: 0.2rem 0; line-height: 1.5; }
+.log-entry.green { color: var(--green); }
+.log-entry.cyan { color: var(--cyan); }
+.log-entry.yellow { color: var(--yellow); }
+.log-entry .ts { color: var(--text-dim); }
+
+/* Footer */
+.footer { text-align: center; padding: 2rem 0; border-top: 1px solid rgba(255,255,255,0.04); }
+.footer a { color: var(--green); text-decoration: none; }
+.footer a:hover { text-decoration: underline; }
+.footer .foot-sub { color: var(--text-dim); font-size: 0.75rem; margin-top: 0.5rem; }
+
+/* Confetti Canvas */
+#confetti { position: fixed; inset: 0; z-index: 999; pointer-events: none; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .stats-bar { grid-template-columns: repeat(2, 1fr); }
+  .reel-container { flex: 0 0 100%; max-width: 320px; }
+  .reels { flex-direction: column; align-items: center; }
+  .entrants-grid { grid-template-columns: 1fr; }
+  .search-input { width: 100%; }
+}
+</style>
+</head>
+<body>
+<canvas id="matrix"></canvas>
+<canvas id="confetti"></canvas>
+
+<div class="page">
+  <!-- Header -->
+  <div class="header">
+    <div class="badge"><span class="dot"></span> Provably Fair Lottery</div>
+    <div class="title">Claude Code Giveaway</div>
+    <div class="sub">3 &times; Free Week of Claude Code &mdash; Random Draw</div>
+    <div class="host">hosted by <a href="https://x.com/zerokn0wledge_" target="_blank">@zerokn0wledge_</a></div>
+  </div>
+
+  <!-- Stats Bar -->
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-label">Status</div>
+      <div id="statusBadge"><span class="status-badge status-pending">Pending</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Entrants</div>
+      <div class="stat-value cyan" id="statEntrants">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Winners</div>
+      <div class="stat-value green">3</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Draw Date</div>
+      <div class="stat-value yellow" id="statDate">&mdash;</div>
+    </div>
+  </div>
+
+  <!-- Provably Fair Panel -->
+  <div class="fair-panel">
+    <h2>&#x1f512; Provably Fair</h2>
+    <div class="fair-row">
+      <div class="fair-label">Seed Hash (SHA-256)</div>
+      <div class="fair-value hidden" id="fairHash">Committed after draw begins</div>
+    </div>
+    <div class="fair-row">
+      <div class="fair-label">Server Seed</div>
+      <div class="fair-value hidden" id="fairSeed">Hidden until draw completes</div>
+    </div>
+    <div class="fair-row">
+      <div class="fair-label">Shuffle Key</div>
+      <div class="fair-value hidden" id="fairKey">Derived after draw</div>
+    </div>
+    <div class="fair-row">
+      <div class="fair-label">Algorithm</div>
+      <div class="fair-value" id="fairAlgo" style="color:var(--text-dim)">Fisher-Yates shuffle with SHA-256 counter-mode PRNG</div>
+    </div>
+    <div class="fair-algo">
+      The seed hash is committed before the draw. After winners are selected, the server seed is revealed.
+      Anyone can verify: <code>SHA256(serverSeed)</code> matches the committed hash, and re-running the shuffle
+      produces the same winners. <a href="/verify">Verify independently &rarr;</a>
+    </div>
+  </div>
+
+  <!-- Entry Management (Admin only) -->
+  <div class="entry-panel" id="entryPanel">
+    <h2>Entry Management</h2>
+    <textarea id="entryInput" placeholder="Paste @usernames here — one per line, comma-separated, or raw Twitter paste. The parser extracts and deduplicates @handles."></textarea>
+    <div class="entry-hint">Supports: @user1, @user2 | one per line | raw Twitter page paste. Host (@zerokn0wledge_) is auto-excluded.</div>
+    <div class="btn-row">
+      <button class="btn-primary btn-sm" onclick="parseEntrants()">Parse &amp; Load</button>
+      <button class="btn-secondary btn-sm" onclick="loadJSONFile()">Load JSON File</button>
+      <input type="file" id="fileInput" accept=".json" style="display:none" onchange="handleFile(event)">
+      <button class="btn-danger btn-sm" onclick="clearEntrants()">Clear All</button>
+      <button class="btn-secondary btn-sm" onclick="exportEntrants()">Export JSON</button>
+    </div>
+  </div>
+
+  <!-- Draw Arena -->
+  <div class="arena">
+    <h2>Draw Arena</h2>
+    <div class="reels">
+      <div class="reel-container">
+        <div class="reel-header">Winner #1</div>
+        <div class="reel-window"><div class="reel-pointer"></div><div class="reel-track" id="reel0"></div></div>
+      </div>
+      <div class="reel-container">
+        <div class="reel-header">Winner #2</div>
+        <div class="reel-window"><div class="reel-pointer"></div><div class="reel-track" id="reel1"></div></div>
+      </div>
+      <div class="reel-container">
+        <div class="reel-header">Winner #3</div>
+        <div class="reel-window"><div class="reel-pointer"></div><div class="reel-track" id="reel2"></div></div>
+      </div>
+    </div>
+    <div class="draw-controls">
+      <button class="btn-draw" id="btnDraw" onclick="executeDraw()">Execute Draw</button>
+      <button class="btn-ghost hidden" id="btnReplay" onclick="replayDraw()">Replay Animation</button>
+      <button class="btn-secondary hidden" id="btnDownload" onclick="downloadResults()">Download results.json</button>
+    </div>
+    <div class="winner-cards hidden" id="winnerCards"></div>
+  </div>
+
+  <!-- Entrants List -->
+  <div class="entrants-section">
+    <div class="entrants-header">
+      <h2 id="entrantsTitle">All Entrants (0)</h2>
+      <input type="text" class="search-input" placeholder="Search entrants..." oninput="filterEntrants(this.value)">
+    </div>
+    <div class="entrants-grid" id="entrantsGrid"></div>
+  </div>
+
+  <!-- Audit Log -->
+  <div class="audit-section">
+    <h2>Audit Log</h2>
+    <div class="audit-log" id="auditLog"></div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <a href="https://x.com/zerokn0wledge_" target="_blank">Claude Code Giveaway by @zerokn0wledge_</a>
+    <div class="foot-sub">Provably fair &bull; Open source &bull; Deterministic verification</div>
+  </div>
+</div>
+
+<script>
+// ===== STATE =====
+let entrants = [];
+let winners = [];
+let serverSeed = '';
+let seedHash = '';
+let shuffleKey = '';
+let drawComplete = false;
+let isAnimating = false;
+
+// ===== SHA-256 (Web Crypto) =====
+async function sha256(str) {
+  const buf = new TextEncoder().encode(str);
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ===== PRNG =====
+function createPRNG(seedHex) {
+  let counter = 0;
+  return async function next() {
+    const input = seedHex + ':' + counter;
+    counter++;
+    const hash = await sha256(input);
+    const value = parseInt(hash.slice(0, 8), 16);
+    return value / 0x100000000;
+  };
+}
+
+// ===== SEEDED SHUFFLE =====
+async function seededShuffle(array, seedHex) {
+  const rng = createPRNG(seedHex);
+  const a = [...array];
+  for (let i = a.length - 1; i >= 1; i--) {
+    const r = await rng();
+    const j = Math.floor(r * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ===== LOGGING =====
+function log(msg, cls = 'cyan') {
+  const el = document.getElementById('auditLog');
+  const ts = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  const entry = document.createElement('div');
+  entry.className = 'log-entry ' + cls;
+  entry.innerHTML = '<span class="ts">[' + ts + ']</span> ' + msg;
+  el.prepend(entry);
+}
+
+// ===== STATS =====
+function updateStats() {
+  document.getElementById('statEntrants').textContent = entrants.length;
+  document.getElementById('entrantsTitle').textContent = 'All Entrants (' + entrants.length + ')';
+}
+function setStatus(status, dateStr) {
+  const el = document.getElementById('statusBadge');
+  if (status === 'pending') el.innerHTML = '<span class="status-badge status-pending">Pending</span>';
+  else if (status === 'drawing') el.innerHTML = '<span class="status-badge status-drawing">Drawing</span>';
+  else if (status === 'complete') el.innerHTML = '<span class="status-badge status-complete">Complete</span>';
+  if (dateStr) {
+    const d = new Date(dateStr);
+    document.getElementById('statDate').textContent = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+}
+
+// ===== RENDER ENTRANTS =====
+function renderEntrants(filter = '') {
+  const grid = document.getElementById('entrantsGrid');
+  grid.innerHTML = '';
+  const lower = filter.toLowerCase();
+  const winnerSet = new Set(winners.map(w => w.toLowerCase()));
+  entrants.forEach((u, i) => {
+    if (lower && !u.toLowerCase().includes(lower)) return;
+    const div = document.createElement('div');
+    div.className = 'entrant-item' + (winnerSet.has(u.toLowerCase()) ? ' is-winner' : '');
+    div.textContent = (winnerSet.has(u.toLowerCase()) ? '\u{1f3c6} ' : '') + '#' + (i + 1) + ' @' + u;
+    grid.appendChild(div);
+  });
+}
+function filterEntrants(val) { renderEntrants(val); }
+
+// ===== PROVABLY FAIR PANEL =====
+function updateFairPanel(data) {
+  const h = document.getElementById('fairHash');
+  const s = document.getElementById('fairSeed');
+  const k = document.getElementById('fairKey');
+  if (data.seed_hash_sha256) { h.textContent = data.seed_hash_sha256; h.classList.remove('hidden'); }
+  if (data.server_seed) { s.textContent = data.server_seed; s.classList.remove('hidden'); }
+  if (data.shuffle_key) { k.textContent = data.shuffle_key; k.classList.remove('hidden'); }
+}
+
+// ===== ENTRY MANAGEMENT =====
+const SKIP_WORDS = new Set(['mention','reply','repost','quote','share','like','follow','replying','retweeted','everyone','here','channel','username','handle']);
+
+function parseEntrants() {
+  const raw = document.getElementById('entryInput').value;
+  if (!raw.trim()) return;
+  const mentions = new Set();
+  const re = /@([A-Za-z0-9_]{1,15})\b/g;
+  let m;
+  while ((m = re.exec(raw)) !== null) {
+    const u = m[1]; const lower = u.toLowerCase();
+    if (lower === 'zerokn0wledge_') continue;
+    if (SKIP_WORDS.has(lower)) continue;
+    if (![...mentions].some(x => x.toLowerCase() === lower)) mentions.add(u);
+  }
+  raw.split('\n').forEach(line => {
+    const t = line.trim();
+    if (/^@?[A-Za-z0-9_]{1,15}$/.test(t)) {
+      const u = t.replace(/^@/, ''); const lower = u.toLowerCase();
+      if (lower === 'zerokn0wledge_' || SKIP_WORDS.has(lower)) return;
+      if (![...mentions].some(x => x.toLowerCase() === lower)) mentions.add(u);
+    }
+  });
+  entrants = [...mentions].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  updateStats(); renderEntrants();
+  log('Parsed ' + entrants.length + ' unique entrants', 'green');
+}
+
+function loadJSONFile() { document.getElementById('fileInput').click(); }
+function handleFile(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (data.entrants && Array.isArray(data.entrants)) {
+        entrants = data.entrants;
+        updateStats(); renderEntrants();
+        log('Loaded ' + entrants.length + ' entrants from JSON file', 'green');
+      }
+    } catch { log('Failed to parse JSON file', 'yellow'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+function clearEntrants() { entrants = []; winners = []; updateStats(); renderEntrants(); log('Cleared all entrants', 'yellow'); }
+function exportEntrants() {
+  const data = { title: "Claude Code Giveaway \u2014 @zerokn0wledge_", parsed_at: new Date().toISOString(), source: "https://x.com/zerokn0wledge_/status/TWEET_ID", entrant_count: entrants.length, entrants };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'entrants.json'; a.click(); URL.revokeObjectURL(a.href);
+}
+
+// ===== SLOT ANIMATION =====
+function animateReel(reelIndex, winner, duration) {
+  return new Promise(resolve => {
+    const track = document.getElementById('reel' + reelIndex);
+    const totalItems = 40 + reelIndex * 15;
+    const winnerPos = totalItems - 5 + 2; // center of last visible window
+    track.innerHTML = '';
+
+    const items = [];
+    for (let i = 0; i < totalItems; i++) {
+      const div = document.createElement('div');
+      div.className = 'reel-item';
+      if (i === winnerPos) {
+        div.textContent = '@' + winner;
+        div.classList.add('winner');
+      } else {
+        div.textContent = '@' + entrants[Math.floor(Math.random() * entrants.length)];
+      }
+      track.appendChild(div);
+      items.push(div);
+    }
+
+    const itemH = 40;
+    // Final offset: winner at center of 200px window (5 items). Center = item index 2 of visible 5.
+    // winnerPos is the index. We want winnerPos to be at the center (position 2 of 5 visible).
+    const finalOffset = (winnerPos - 2) * itemH;
+
+    const start = performance.now();
+    function tick(now) {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 4); // quartic ease-out
+      const offset = ease * finalOffset;
+      track.style.transform = 'translateY(-' + offset + 'px)';
+      if (progress < 1) requestAnimationFrame(tick);
+      else resolve();
+    }
+    requestAnimationFrame(tick);
+  });
+}
+
+async function runSlotAnimation(winnerList) {
+  for (let i = 0; i < 3; i++) {
+    const duration = 2500 + i * 800;
+    await animateReel(i, winnerList[i], duration);
+    if (i < 2) await sleep(400);
+  }
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ===== WINNER CARDS =====
+function showWinnerCards(winnerList) {
+  const container = document.getElementById('winnerCards');
+  container.classList.remove('hidden');
+  container.innerHTML = '';
+  const ranks = ['rank-1', 'rank-2', 'rank-3'];
+  const emojis = ['\u{1f947}', '\u{1f948}', '\u{1f949}'];
+  winnerList.forEach((w, i) => {
+    const origIdx = entrants.findIndex(e => e === w);
+    const card = document.createElement('div');
+    card.className = 'winner-card';
+    card.innerHTML = '<div class="winner-rank ' + ranks[i] + '">' + (i + 1) + '</div>' +
+      '<div class="winner-name">@' + w + '</div>' +
+      '<div class="winner-entry">Entry #' + (origIdx + 1) + ' of ' + entrants.length + '</div>';
+    container.appendChild(card);
+    setTimeout(() => card.classList.add('revealed'), 300 * (i + 1));
+  });
+}
+
+// ===== CONFETTI =====
+function fireConfetti() {
+  const canvas = document.getElementById('confetti');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const colors = ['#00ff88', '#00e5ff', '#a855f7', '#ff4daa', '#ffd600', '#ff3b3b'];
+  const particles = [];
+  for (let i = 0; i < 150; i++) {
+    particles.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height * 0.5 - canvas.height * 0.2,
+      vx: (Math.random() - 0.5) * 8,
+      vy: Math.random() * 3 + 1,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      size: Math.random() * 6 + 3,
+      rotation: Math.random() * 360,
+      rotSpeed: (Math.random() - 0.5) * 10,
+      life: 0
+    });
+  }
+  let frame = 0;
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let alive = false;
+    particles.forEach(p => {
+      p.life++;
+      if (p.life > 120) return;
+      alive = true;
+      p.vy += 0.08;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rotation += p.rotSpeed;
+      const alpha = Math.max(0, 1 - p.life / 120);
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rotation * Math.PI / 180);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+      ctx.restore();
+    });
+    if (alive) requestAnimationFrame(draw);
+    else ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  requestAnimationFrame(draw);
+}
+
+// ===== DRAW EXECUTION =====
+async function executeDraw() {
+  if (entrants.length < 3) { log('Need at least 3 entrants to draw', 'yellow'); return; }
+  if (isAnimating) return;
+  isAnimating = true;
+  document.getElementById('btnDraw').disabled = true;
+  setStatus('drawing');
+  log('Draw initiated', 'cyan');
+
+  // Generate server seed
+  serverSeed = crypto.randomUUID() + '-' + Date.now() + '-' + crypto.randomUUID();
+  seedHash = await sha256(serverSeed);
+  log('Server seed generated and committed', 'cyan');
+  log('Seed hash: ' + seedHash.slice(0, 16) + '...', 'cyan');
+
+  // Show hash (but not seed yet)
+  document.getElementById('fairHash').textContent = seedHash;
+  document.getElementById('fairHash').classList.remove('hidden');
+  document.getElementById('fairSeed').textContent = 'Hidden until draw completes';
+
+  // Derive shuffle key
+  shuffleKey = await sha256(serverSeed + ':' + entrants.length);
+  log('Shuffle key derived from seed + entrant count', 'cyan');
+
+  // Shuffle
+  const shuffled = await seededShuffle(entrants, shuffleKey);
+  winners = shuffled.slice(0, 3);
+  log('Fisher-Yates shuffle complete', 'cyan');
+
+  // Animate
+  log('Slot animation starting...', 'cyan');
+  await runSlotAnimation(winners);
+  log('All reels locked', 'green');
+
+  // Reveal
+  document.getElementById('fairSeed').textContent = serverSeed;
+  document.getElementById('fairSeed').classList.remove('hidden');
+  document.getElementById('fairKey').textContent = shuffleKey;
+  document.getElementById('fairKey').classList.remove('hidden');
+  log('Server seed revealed: ' + serverSeed.slice(0, 20) + '...', 'green');
+
+  // Winner cards
+  showWinnerCards(winners);
+  winners.forEach((w, i) => log('Winner #' + (i + 1) + ': @' + w, 'green'));
+
+  // Confetti
+  fireConfetti();
+
+  // Status
+  drawComplete = true;
+  setStatus('complete', new Date().toISOString());
+  renderEntrants();
+  log('Draw complete — results are provably fair', 'green');
+
+  // Show controls
+  document.getElementById('btnDraw').classList.add('hidden');
+  document.getElementById('btnReplay').classList.remove('hidden');
+  document.getElementById('btnDownload').classList.remove('hidden');
+  document.getElementById('entryPanel').classList.add('hidden');
+  isAnimating = false;
+}
+
+async function replayDraw() {
+  if (isAnimating || !drawComplete) return;
+  isAnimating = true;
+  document.getElementById('btnReplay').disabled = true;
+  document.getElementById('winnerCards').classList.add('hidden');
+  await runSlotAnimation(winners);
+  showWinnerCards(winners);
+  fireConfetti();
+  document.getElementById('btnReplay').disabled = false;
+  isAnimating = false;
+}
+
+function downloadResults() {
+  const winnerIndices = winners.map(w => entrants.indexOf(w));
+  const data = {
+    status: 'complete',
+    draw_date: new Date().toISOString(),
+    server_seed: serverSeed,
+    seed_hash_sha256: seedHash,
+    shuffle_key: shuffleKey,
+    algorithm: 'fisher-yates-sha256-counter-mode',
+    algorithm_spec: "shuffleKey=SHA256(serverSeed+':'+entrantCount), PRNG=SHA256(shuffleKey+':'+counter)[0:8]\u2192uint32/2^32, Fisher-Yates descending",
+    entrant_count: entrants.length,
+    winners: winners,
+    winner_indices: winnerIndices
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'results.json'; a.click(); URL.revokeObjectURL(a.href);
+}
+
+// ===== MATRIX RAIN =====
+function initMatrix() {
+  const canvas = document.getElementById('matrix');
+  const ctx = canvas.getContext('2d');
+  let w, h, columns, drops;
+  const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンCC*|(){}CLAUDE01'.split('');
+  const fontSize = 14;
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+    columns = Math.floor(w / fontSize);
+    drops = new Array(columns).fill(1);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  function draw() {
+    ctx.fillStyle = 'rgba(10, 10, 15, 0.05)';
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#00ff88';
+    ctx.font = fontSize + 'px monospace';
+    for (let i = 0; i < columns; i++) {
+      const char = chars[Math.floor(Math.random() * chars.length)];
+      ctx.fillText(char, i * fontSize, drops[i] * fontSize);
+      if (drops[i] * fontSize > h && Math.random() > 0.975) drops[i] = 0;
+      drops[i]++;
+    }
+  }
+  setInterval(draw, 50);
+}
+
+// ===== PAGE LOAD =====
+window.addEventListener('DOMContentLoaded', async () => {
+  initMatrix();
+  log('Claude Code Lotto initialized', 'cyan');
+
+  // Try loading entrants
+  try {
+    const eres = await fetch('data/entrants.json');
+    if (eres.ok) {
+      const data = await eres.json();
+      if (data.entrants && data.entrants.length > 0) {
+        entrants = data.entrants;
+        renderEntrants(); updateStats();
+        log('Loaded ' + entrants.length + ' entrants from data file', 'green');
+      }
+    }
+  } catch (e) {}
+
+  // Try loading results
+  try {
+    const rres = await fetch('data/results.json');
+    if (rres.ok) {
+      const data = await rres.json();
+      if (data.status !== 'pending' && data.server_seed) {
+        // PUBLIC MODE
+        serverSeed = data.server_seed;
+        seedHash = data.seed_hash_sha256;
+        shuffleKey = data.shuffle_key;
+        drawComplete = true;
+
+        updateFairPanel(data);
+        document.getElementById('entryPanel').classList.add('hidden');
+        document.getElementById('btnDraw').classList.add('hidden');
+        document.getElementById('btnReplay').classList.remove('hidden');
+        setStatus('complete', data.draw_date);
+        log('Results loaded — draw already complete', 'green');
+
+        // Derive winners
+        const key = await sha256(serverSeed + ':' + entrants.length);
+        const shuffled = await seededShuffle(entrants, key);
+        winners = shuffled.slice(0, 3);
+
+        renderEntrants();
+        winners.forEach((w, i) => log('Winner #' + (i + 1) + ': @' + w, 'green'));
+
+        // Auto-replay after delay
+        setTimeout(() => replayDraw(), 1500);
+      }
+    }
+  } catch (e) {}
+});
+</script>
+</body>
+</html>

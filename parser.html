@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Twitter Comment Parser — Claude Code Lotto</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a0a0f; --bg2: #111119; --bg3: #1a1a25;
+  --green: #00ff88; --green2: #00cc6a; --green-dim: rgba(0,255,136,0.12);
+  --cyan: #00e5ff; --text: #e0e0e8; --text-dim: #6a6a80;
+  --red: #ff3b3b; --yellow: #ffd600;
+  --mono: 'SF Mono','Fira Code','Cascadia Code','JetBrains Mono',Consolas,monospace;
+  --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+}
+body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; padding: 2rem 1rem; }
+.container { max-width: 900px; margin: 0 auto; }
+h1 { font-family: var(--mono); font-size: 1.5rem; color: var(--green); margin-bottom: 0.5rem; }
+.subtitle { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 2rem; }
+.subtitle a { color: var(--green); text-decoration: none; }
+.instructions {
+  background: var(--bg2); border: 1px solid rgba(0,255,136,0.15); border-radius: 8px;
+  padding: 1.25rem; margin-bottom: 1.5rem; font-size: 0.85rem; line-height: 1.7;
+}
+.instructions strong { color: var(--green); }
+.instructions ol { padding-left: 1.5rem; color: var(--text-dim); }
+.instructions li { margin-bottom: 0.25rem; }
+textarea {
+  width: 100%; height: 250px; background: var(--bg3); color: var(--text); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px; padding: 1rem; font-family: var(--mono); font-size: 0.85rem; resize: vertical;
+  outline: none; transition: border-color 0.2s;
+}
+textarea:focus { border-color: var(--green); }
+textarea::placeholder { color: var(--text-dim); }
+.btn-row { display: flex; gap: 0.75rem; margin: 1rem 0; flex-wrap: wrap; }
+button {
+  font-family: var(--mono); font-size: 0.85rem; padding: 0.6rem 1.25rem; border: none; border-radius: 6px;
+  cursor: pointer; transition: all 0.2s;
+}
+.btn-primary { background: var(--green); color: #000; font-weight: 700; }
+.btn-primary:hover { background: var(--green2); }
+.btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid rgba(255,255,255,0.1); }
+.btn-secondary:hover { border-color: var(--green); color: var(--green); }
+.btn-danger { background: rgba(255,59,59,0.15); color: var(--red); border: 1px solid rgba(255,59,59,0.2); }
+.btn-danger:hover { background: rgba(255,59,59,0.25); }
+.stats {
+  background: var(--bg2); border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0;
+  font-family: var(--mono); font-size: 0.9rem; display: none;
+}
+.stats .num { color: var(--cyan); font-weight: 700; }
+.stats .arrow { color: var(--green); }
+.preview-label { color: var(--text-dim); font-size: 0.8rem; margin: 1rem 0 0.5rem; font-family: var(--mono); }
+.preview {
+  background: var(--bg3); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px;
+  padding: 1rem; font-family: var(--mono); font-size: 0.8rem; color: var(--text-dim);
+  max-height: 350px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; display: none;
+}
+.preview::-webkit-scrollbar { width: 6px; }
+.preview::-webkit-scrollbar-track { background: transparent; }
+.preview::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+.back-link { display: inline-block; margin-bottom: 1rem; color: var(--text-dim); text-decoration: none; font-family: var(--mono); font-size: 0.8rem; }
+.back-link:hover { color: var(--green); }
+</style>
+</head>
+<body>
+<div class="container">
+  <a href="/" class="back-link">&larr; Back to Lottery</a>
+  <h1>Twitter Comment Parser</h1>
+  <p class="subtitle">Extract entrants from Twitter/X comments &mdash; <a href="/">Claude Code Lotto</a></p>
+
+  <div class="instructions">
+    <strong>How to use:</strong>
+    <ol>
+      <li>Go to your tweet's comments on Twitter/X</li>
+      <li>Scroll through ALL comments to load them</li>
+      <li>Select all (Cmd+A / Ctrl+A) and copy</li>
+      <li>Paste everything below &mdash; the parser handles the mess</li>
+      <li>Click Parse &rarr; Download JSON</li>
+      <li>Save as <code style="color:var(--cyan)">data/entrants.json</code> in the repo</li>
+    </ol>
+  </div>
+
+  <textarea id="rawInput" placeholder="Paste raw Twitter/X page content here..."></textarea>
+
+  <div class="btn-row">
+    <button class="btn-primary" onclick="parseUsernames()">Parse Usernames</button>
+    <button class="btn-secondary" onclick="copyJSON()">Copy JSON</button>
+    <button class="btn-secondary" onclick="downloadJSON()">Download JSON</button>
+    <button class="btn-danger" onclick="clearAll()">Clear</button>
+  </div>
+
+  <div class="stats" id="stats"></div>
+  <div class="preview-label" id="previewLabel" style="display:none">Parsed JSON:</div>
+  <div class="preview" id="preview"></div>
+</div>
+
+<script>
+const SKIP_WORDS = new Set([
+  'mention','reply','repost','quote','share','like','follow','replying',
+  'retweeted','everyone','here','channel','username','handle',
+  'search','explore','notifications','messages','premium','communities',
+  'home','trending','more','post','posts','media','likes','lists','bookmarks',
+  'verified','highlights','articles'
+]);
+const HOST = 'zerokn0wledge_';
+
+let parsedEntrants = [];
+
+function parseUsernames() {
+  const raw = document.getElementById('rawInput').value;
+  if (!raw.trim()) return;
+
+  const mentions = new Set();
+  const re = /@([A-Za-z0-9_]{1,15})\b/g;
+  let m;
+  while ((m = re.exec(raw)) !== null) {
+    const u = m[1];
+    const lower = u.toLowerCase();
+    if (lower === HOST.toLowerCase()) continue;
+    if (SKIP_WORDS.has(lower)) continue;
+    // Deduplicate case-insensitively but keep first casing seen
+    const existing = [...mentions].find(x => x.toLowerCase() === lower);
+    if (!existing) mentions.add(u);
+  }
+
+  // Also try line-by-line for clean lists
+  const lines = raw.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (/^@?[A-Za-z0-9_]{1,15}$/.test(trimmed)) {
+      const u = trimmed.replace(/^@/, '');
+      const lower = u.toLowerCase();
+      if (lower === HOST.toLowerCase()) continue;
+      if (SKIP_WORDS.has(lower)) continue;
+      const existing = [...mentions].find(x => x.toLowerCase() === lower);
+      if (!existing) mentions.add(u);
+    }
+  }
+
+  parsedEntrants = [...mentions].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+
+  const totalMentions = (raw.match(/@[A-Za-z0-9_]{1,15}\b/g) || []).length;
+
+  const statsEl = document.getElementById('stats');
+  statsEl.style.display = 'block';
+  statsEl.innerHTML = `Found <span class="num">${totalMentions}</span> @mentions <span class="arrow">&rarr;</span> <span class="num">${parsedEntrants.length}</span> unique entrants`;
+
+  const json = buildJSON();
+  document.getElementById('previewLabel').style.display = 'block';
+  const previewEl = document.getElementById('preview');
+  previewEl.style.display = 'block';
+  previewEl.textContent = JSON.stringify(json, null, 2);
+}
+
+function buildJSON() {
+  return {
+    title: "Claude Code Giveaway — @zerokn0wledge_",
+    parsed_at: new Date().toISOString(),
+    source: "https://x.com/zerokn0wledge_/status/TWEET_ID",
+    entrant_count: parsedEntrants.length,
+    entrants: parsedEntrants
+  };
+}
+
+function copyJSON() {
+  if (!parsedEntrants.length) return;
+  navigator.clipboard.writeText(JSON.stringify(buildJSON(), null, 2));
+  const btn = event.target;
+  btn.textContent = 'Copied!';
+  setTimeout(() => btn.textContent = 'Copy JSON', 1500);
+}
+
+function downloadJSON() {
+  if (!parsedEntrants.length) return;
+  const blob = new Blob([JSON.stringify(buildJSON(), null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'entrants.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function clearAll() {
+  document.getElementById('rawInput').value = '';
+  document.getElementById('stats').style.display = 'none';
+  document.getElementById('previewLabel').style.display = 'none';
+  document.getElementById('preview').style.display = 'none';
+  parsedEntrants = [];
+}
+</script>
+</body>
+</html>
