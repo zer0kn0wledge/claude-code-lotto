@@ -402,6 +402,62 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     <div class="winner-cards hidden" id="winnerCards"></div>
   </div>
 
+  <!-- Bonus Draw -->
+  <div class="arena" id="bonusArena" style="border:1px solid rgba(168,85,247,0.2);background-image:radial-gradient(ellipse at top center, rgba(168,85,247,0.06), transparent 60%)">
+    <h2 style="color:var(--purple)">Bonus Draw</h2>
+    <div style="text-align:center;margin-bottom:1.5rem">
+      <div style="font-size:0.85rem;color:var(--text-dim);line-height:1.6;max-width:600px;margin:0 auto">
+        <a href="https://x.com/kasentuner" target="_blank" style="color:var(--purple);text-decoration:none;font-weight:700">@kasentuner</a> won the original draw but generously donated their prize back.
+        <br>One more week of Claude Code up for grabs — same provably fair mechanism, drawn from the remaining 79 entrants.
+      </div>
+    </div>
+
+    <!-- Bonus Provably Fair -->
+    <div style="background:rgba(168,85,247,0.04);border:1px solid rgba(168,85,247,0.15);border-radius:10px;padding:1.25rem;margin-bottom:1.5rem">
+      <div class="fair-row">
+        <div class="fair-label">Seed Hash (SHA-256)</div>
+        <div class="fair-value hidden" id="bonusFairHash">Committed after draw begins</div>
+      </div>
+      <div class="fair-row">
+        <div class="fair-label">Server Seed</div>
+        <div class="fair-value hidden" id="bonusFairSeed">Hidden until draw completes</div>
+      </div>
+      <div class="fair-row">
+        <div class="fair-label">Shuffle Key</div>
+        <div class="fair-value hidden" id="bonusFairKey">Derived after draw</div>
+      </div>
+      <div class="fair-row" style="margin-bottom:0">
+        <div class="fair-label">Eligible Entrants</div>
+        <div class="fair-value" id="bonusEligible" style="color:var(--text-dim)">79 (82 total minus 3 original winners)</div>
+      </div>
+    </div>
+
+    <!-- Bonus Reel -->
+    <div class="reels" style="justify-content:center">
+      <div class="reel-container">
+        <div class="reel-header" style="color:var(--purple)">Bonus Winner</div>
+        <div class="reel-window" style="border-color:rgba(168,85,247,0.15)">
+          <div class="reel-pointer" style="border-color:var(--purple);box-shadow:0 0 15px rgba(168,85,247,0.15)"></div>
+          <div class="reel-track" id="bonusReel"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="draw-controls">
+      <button class="btn-draw hidden" id="btnBonusDraw" onclick="executeBonusDraw()" style="background:linear-gradient(135deg,var(--purple),#7c3aed)">Execute Bonus Draw</button>
+      <button class="btn-ghost hidden" id="btnBonusReplay" onclick="replayBonusDraw()" style="color:var(--purple);border-color:var(--purple)">Replay Bonus Animation</button>
+    </div>
+
+    <!-- Bonus Pending Notice -->
+    <div class="hidden" id="bonusPendingNotice" style="text-align:center;padding:1.5rem">
+      <div style="font-family:var(--mono);font-size:1.1rem;color:var(--yellow);margin-bottom:0.5rem">&#9203; Bonus Draw Pending</div>
+      <div style="color:var(--text-dim);font-size:0.85rem">The bonus draw has not been executed yet. Check back shortly!</div>
+    </div>
+
+    <!-- Bonus Winner Card -->
+    <div class="winner-cards hidden" id="bonusWinnerCard"></div>
+  </div>
+
   <!-- Entrants List -->
   <div class="entrants-section">
     <div class="entrants-header">
@@ -877,6 +933,158 @@ function downloadResults() {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'results.json'; a.click(); URL.revokeObjectURL(a.href);
 }
 
+// ===== BONUS DRAW =====
+const EXCLUDED_WINNERS = ['umairianyat', '_0x404_', 'kasentuner'];
+let bonusEntrants = [];
+let bonusWinner = '';
+let bonusServerSeed = '';
+let bonusSeedHash = '';
+let bonusShuffleKey = '';
+let bonusDrawComplete = false;
+
+function getBonusEntrants() {
+  const excluded = new Set(EXCLUDED_WINNERS.map(w => w.toLowerCase()));
+  return entrants.filter(u => !excluded.has(u.toLowerCase()));
+}
+
+async function executeBonusDraw() {
+  if (bonusDrawComplete) { log('Bonus draw already executed — locked', 'yellow'); return; }
+  bonusEntrants = getBonusEntrants();
+  if (bonusEntrants.length < 1) { log('No eligible entrants for bonus draw', 'yellow'); return; }
+  if (isAnimating) return;
+  isAnimating = true;
+  document.getElementById('btnBonusDraw').disabled = true;
+  log('Bonus draw initiated — ' + bonusEntrants.length + ' eligible entrants', 'cyan');
+
+  // Generate seed
+  bonusServerSeed = crypto.randomUUID() + '-BONUS-' + Date.now() + '-' + crypto.randomUUID();
+  bonusSeedHash = await sha256(bonusServerSeed);
+  log('Bonus seed committed: ' + bonusSeedHash.slice(0, 16) + '...', 'cyan');
+
+  document.getElementById('bonusFairHash').textContent = bonusSeedHash;
+  document.getElementById('bonusFairHash').classList.remove('hidden');
+
+  // Shuffle
+  bonusShuffleKey = await sha256(bonusServerSeed + ':' + bonusEntrants.length);
+  const shuffled = await seededShuffle(bonusEntrants, bonusShuffleKey);
+  bonusWinner = shuffled[0];
+  log('Bonus shuffle complete', 'cyan');
+
+  // Animate single reel
+  await animateBonusReel(bonusWinner);
+  log('Bonus reel locked', 'green');
+
+  // Reveal
+  document.getElementById('bonusFairSeed').textContent = bonusServerSeed;
+  document.getElementById('bonusFairSeed').classList.remove('hidden');
+  document.getElementById('bonusFairKey').textContent = bonusShuffleKey;
+  document.getElementById('bonusFairKey').classList.remove('hidden');
+  log('Bonus seed revealed', 'green');
+
+  // Winner card
+  showBonusWinnerCard(bonusWinner);
+  log('Bonus Winner: @' + bonusWinner + ' (courtesy of @kasentuner)', 'green');
+
+  fireConfetti();
+  bonusDrawComplete = true;
+
+  document.getElementById('btnBonusDraw').classList.add('hidden');
+  document.getElementById('btnBonusReplay').classList.remove('hidden');
+
+  // Auto-commit
+  log('Committing bonus results to GitHub...', 'cyan');
+  const bonusPayload = {
+    status: 'complete',
+    draw_date: new Date().toISOString(),
+    server_seed: bonusServerSeed,
+    seed_hash_sha256: bonusSeedHash,
+    shuffle_key: bonusShuffleKey,
+    algorithm: 'fisher-yates-sha256-counter-mode',
+    algorithm_spec: "shuffleKey=SHA256(serverSeed+':'+eligibleCount), PRNG=SHA256(shuffleKey+':'+counter)[0:8]\u2192uint32/2^32, Fisher-Yates descending",
+    excluded_winners: EXCLUDED_WINNERS,
+    eligible_count: bonusEntrants.length,
+    winners: [bonusWinner],
+    courtesy_of: 'kasentuner'
+  };
+  try {
+    const r = await fetch('/api/commit-bonus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ results: bonusPayload })
+    });
+    const d = await r.json();
+    if (r.ok && d.success) {
+      log('Bonus results committed to GitHub — permanently locked (commit: ' + d.commit.slice(0, 7) + ')', 'green');
+    } else {
+      log('Bonus auto-commit failed: ' + (d.error || 'unknown'), 'yellow');
+    }
+  } catch (e) {
+    log('Bonus auto-commit failed: ' + e.message, 'yellow');
+  }
+
+  log('Bonus draw complete — provably fair', 'green');
+  isAnimating = false;
+}
+
+function animateBonusReel(winner) {
+  return new Promise(resolve => {
+    const track = document.getElementById('bonusReel');
+    const totalItems = 55;
+    const winnerPos = totalItems - 5 + 2;
+    track.innerHTML = '';
+    for (let i = 0; i < totalItems; i++) {
+      const div = document.createElement('div');
+      div.className = 'reel-item';
+      if (i === winnerPos) {
+        div.textContent = '@' + winner;
+        div.classList.add('winner');
+        div.style.color = '#a855f7';
+        div.style.textShadow = '0 0 10px rgba(168,85,247,0.5)';
+      } else {
+        div.textContent = '@' + bonusEntrants[Math.floor(Math.random() * bonusEntrants.length)];
+      }
+      track.appendChild(div);
+    }
+    const finalOffset = (winnerPos - 2) * 40;
+    const start = performance.now();
+    function tick(now) {
+      const progress = Math.min((now - start) / 3000, 1);
+      const ease = 1 - Math.pow(1 - progress, 4);
+      track.style.transform = 'translateY(-' + (ease * finalOffset) + 'px)';
+      if (progress < 1) requestAnimationFrame(tick);
+      else resolve();
+    }
+    requestAnimationFrame(tick);
+  });
+}
+
+function showBonusWinnerCard(winner) {
+  const container = document.getElementById('bonusWinnerCard');
+  container.classList.remove('hidden');
+  container.innerHTML = '';
+  const origIdx = entrants.findIndex(e => e.toLowerCase() === winner.toLowerCase());
+  const card = document.createElement('div');
+  card.className = 'winner-card';
+  card.style.borderColor = 'rgba(168,85,247,0.3)';
+  card.innerHTML = '<div class="winner-rank" style="background:linear-gradient(135deg,var(--purple),#7c3aed);color:#fff">B</div>' +
+    '<div class="winner-name" style="color:var(--purple)">@' + winner + '</div>' +
+    '<div class="winner-entry">Bonus Winner &mdash; courtesy of @kasentuner</div>';
+  container.appendChild(card);
+  setTimeout(() => card.classList.add('revealed'), 300);
+}
+
+async function replayBonusDraw() {
+  if (isAnimating || !bonusDrawComplete) return;
+  isAnimating = true;
+  document.getElementById('btnBonusReplay').disabled = true;
+  document.getElementById('bonusWinnerCard').classList.add('hidden');
+  await animateBonusReel(bonusWinner);
+  showBonusWinnerCard(bonusWinner);
+  fireConfetti();
+  document.getElementById('btnBonusReplay').disabled = false;
+  isAnimating = false;
+}
+
 // ===== MATRIX RAIN =====
 function initMatrix() {
   const canvas = document.getElementById('matrix');
@@ -979,6 +1187,52 @@ window.addEventListener('DOMContentLoaded', async () => {
       log('Draw has not been executed yet', 'yellow');
     }
   }
+
+  // ===== BONUS DRAW LOAD =====
+  try {
+    const bres = await fetch('data/bonus-results.json');
+    if (bres.ok) {
+      const bdata = await bres.json();
+      if (bdata.status !== 'pending' && bdata.server_seed) {
+        // BONUS REPLAY MODE
+        bonusServerSeed = bdata.server_seed;
+        bonusSeedHash = bdata.seed_hash_sha256;
+        bonusShuffleKey = bdata.shuffle_key;
+        bonusDrawComplete = true;
+
+        document.getElementById('bonusFairHash').textContent = bonusSeedHash;
+        document.getElementById('bonusFairHash').classList.remove('hidden');
+        document.getElementById('bonusFairSeed').textContent = bonusServerSeed;
+        document.getElementById('bonusFairSeed').classList.remove('hidden');
+        document.getElementById('bonusFairKey').textContent = bonusShuffleKey;
+        document.getElementById('bonusFairKey').classList.remove('hidden');
+        document.getElementById('bonusEligible').textContent = bdata.eligible_count + ' (82 total minus 3 original winners)';
+        document.getElementById('btnBonusDraw').classList.add('hidden');
+        document.getElementById('btnBonusReplay').classList.remove('hidden');
+        log('Bonus results loaded — draw complete', 'green');
+
+        // Derive bonus winner
+        bonusEntrants = getBonusEntrants();
+        const bkey = await sha256(bonusServerSeed + ':' + bonusEntrants.length);
+        const bshuffled = await seededShuffle(bonusEntrants, bkey);
+        bonusWinner = bshuffled[0];
+        log('Bonus Winner: @' + bonusWinner + ' (courtesy of @kasentuner)', 'green');
+
+        // Auto-replay bonus after main draw finishes
+        setTimeout(() => replayBonusDraw(), hasResults ? 8000 : 1500);
+      } else {
+        // Bonus pending
+        if (isAdmin && hasResults) {
+          bonusEntrants = getBonusEntrants();
+          document.getElementById('btnBonusDraw').classList.remove('hidden');
+          document.getElementById('bonusEligible').textContent = bonusEntrants.length + ' (82 total minus 3 original winners)';
+          log('Bonus draw ready — ' + bonusEntrants.length + ' eligible entrants', 'yellow');
+        } else {
+          document.getElementById('bonusPendingNotice').classList.remove('hidden');
+        }
+      }
+    }
+  } catch (e) {}
 });
 </script>
 </body>

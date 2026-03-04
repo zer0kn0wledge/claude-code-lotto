@@ -1,0 +1,12 @@
+{
+  "status": "pending",
+  "draw_date": "",
+  "server_seed": "",
+  "seed_hash_sha256": "",
+  "shuffle_key": "",
+  "algorithm": "fisher-yates-sha256-counter-mode",
+  "excluded_winners": ["umairianyat", "_0x404_", "kasentuner"],
+  "eligible_count": 0,
+  "winners": [],
+  "courtesy_of": "kasentuner"
+}
