@@ -1,12 +1,19 @@
 {
-  "status": "pending",
-  "draw_date": "",
-  "server_seed": "",
-  "seed_hash_sha256": "",
-  "shuffle_key": "",
+  "status": "complete",
+  "draw_date": "2026-03-04T01:03:32.367Z",
+  "server_seed": "c07e8f01-0599-4656-9c3c-f1dc553b6c74-BONUS-1772586209362-96eddb03-2c68-4b24-85b7-83e41147e020",
+  "seed_hash_sha256": "91da9fd564c6813b94c1039fa7265e20d04bbad4863da850b95cf49834d52a76",
+  "shuffle_key": "e7d7087f49050876e712db12b329f788d63c0e7b3f2e38c0400164b54813d567",
   "algorithm": "fisher-yates-sha256-counter-mode",
-  "excluded_winners": ["umairianyat", "_0x404_", "kasentuner"],
-  "eligible_count": 0,
-  "winners": [],
+  "algorithm_spec": "shuffleKey=SHA256(serverSeed+':'+eligibleCount), PRNG=SHA256(shuffleKey+':'+counter)[0:8]→uint32/2^32, Fisher-Yates descending",
+  "excluded_winners": [
+    "umairianyat",
+    "_0x404_",
+    "kasentuner"
+  ],
+  "eligible_count": 79,
+  "winners": [
+    "tonywtf__"
+  ],
   "courtesy_of": "kasentuner"
 }
